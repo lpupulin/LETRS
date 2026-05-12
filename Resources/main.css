@@ -1,0 +1,41 @@
+html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+      background-color: white;
+      font-family: 'Montserrat';
+      padding: 0;
+      margin: 0;
+  }
+  
+  /* Fullscreen background video */
+  #v0 {
+      position: fixed;
+      inset: 0;
+  
+      width: 100vw;
+      height: 100vh;
+  
+      object-fit: cover;
+      object-position: center;
+  
+      z-index: -1;
+  }
+  
+  /* Optional */
+  #set-height {
+      width: 100%;
+      height: 100%;
+  }
+  
+  section {
+      position: relative;
+      z-index: 1;
+  }
+  
+  .content {
+      position: sticky;
+      position: -webkit-sticky;
+      width: 100%;
+  }
