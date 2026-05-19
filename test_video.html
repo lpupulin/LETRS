@@ -6,82 +6,141 @@
   <title>LETRS</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { width: 100vw; height: 100vh; overflow: hidden; background: #000; }
+    html, body { width: 100%; height: 100%; }
+    body {
+      overflow: hidden;
+      background: #000;
+    }
+
     video {
-      position: fixed; inset: 0;
-      width: 100%; height: 100%;
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
       object-fit: cover;
       transition: filter 0.08s linear;
+      background: #000;
     }
+
     #drop {
-      position: fixed; inset: 0; z-index: 10;
-      display: flex; align-items: center; justify-content: center;
-      color: rgba(255,255,255,0.4); font-family: sans-serif; font-size: 14px;
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255,255,255,0.4);
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      user-select: none;
     }
-    #drop.hidden { display: none; }
-    input[type="file"] { display: none; }
+
+    #drop.hidden {
+      display: none;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
   </style>
 </head>
 <body>
+  <video id="v" muted playsinline preload="auto"></video>
 
-<video id="v" muted playsinline preload="auto"></video>
+  <div id="drop">
+    <label for="f" style="cursor:pointer;">Drop video or click to load</label>
+    <input type="file" id="f" accept="video/*">
+  </div>
 
-<div id="drop">
-  <label for="f" style="cursor:pointer;">Drop video or click to load</label>
-  <input type="file" id="f" accept="video/*">
-</div>
+  <script>
+    const v = document.getElementById('v');
+    const drop = document.getElementById('drop');
+    const f = document.getElementById('f');
 
-<script>
-const v = document.getElementById('v');
-const drop = document.getElementById('drop');
-const f = document.getElementById('f');
-let loaded = false;
+    let loaded = false;
+    let targetTime = 0;
+    let latestRequestedTime = 0;
+    let currentBrightness = 1;
+    let targetBrightness = 1;
+    let isSeeking = false;
+    let rafId = null;
 
-let targetTime = 0;
-let currentTime = 0;
-let targetBrightness = 1;
-let currentBrightness = 1;
+    const EASE = 0.12;
+    const SEEK_EPSILON = 0.016;
 
-const EASE = 0.06;
+    f.addEventListener('change', e => load(e.target.files[0]));
 
-f.addEventListener('change', e => load(e.target.files[0]));
-document.body.addEventListener('dragover', e => e.preventDefault());
-document.body.addEventListener('drop', e => { e.preventDefault(); load(e.dataTransfer.files[0]); });
+    document.body.addEventListener('dragover', e => e.preventDefault());
 
-function load(file) {
-  v.src = URL.createObjectURL(file);
-  v.addEventListener('loadedmetadata', () => {
-    loaded = true;
-    drop.classList.add('hidden');
-    v.currentTime = 0;
-    loop();
-  });
-}
+    document.body.addEventListener('drop', e => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file) load(file);
+    });
 
-document.addEventListener('mousemove', e => {
-  if (!loaded || !v.duration) return;
+    function load(file) {
+      if (!file || !file.type.startsWith('video/')) return;
 
-  // X → target time (inverted: right = start, left = end)
-  targetTime = (e.clientX / window.innerWidth) * v.duration;
+      const url = URL.createObjectURL(file);
+      v.src = url;
+      v.load();
 
-  // Y → target brightness
-  const yNorm = e.clientY / window.innerHeight;
-  targetBrightness = 1.1 - yNorm * 0.2;
-});
-
-function loop() {
-  if (loaded && v.duration) {
-    currentTime += (targetTime - currentTime) * EASE;
-    if (Math.abs(v.currentTime - currentTime) > 0.03) {
-      v.currentTime = currentTime;
+      v.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
     }
 
-    currentBrightness += (targetBrightness - currentBrightness) * EASE;
-    v.style.filter = `brightness(${currentBrightness.toFixed(3)})`;
-  }
+    function onLoadedMetadata() {
+      loaded = true;
+      drop.classList.add('hidden');
+      targetTime = 0;
+      latestRequestedTime = 0;
+      v.currentTime = 0;
 
-  requestAnimationFrame(loop);
-}
-</script>
+      if (!rafId) loop();
+    }
+
+    document.addEventListener('mousemove', e => {
+      if (!loaded || !v.duration) return;
+
+      const xNorm = e.clientX / window.innerWidth;
+      const yNorm = e.clientY / window.innerHeight;
+
+      // Inverted X: right = start, left = end
+      targetTime = (1 - xNorm) * v.duration;
+
+      // Very subtle Y brightness
+      targetBrightness = 1.15 - yNorm * 0.2;
+    });
+
+    function requestSeek(time) {
+      latestRequestedTime = Math.max(0, Math.min(v.duration, time));
+      if (isSeeking) return;
+
+      isSeeking = true;
+      v.currentTime = latestRequestedTime;
+    }
+
+    v.addEventListener('seeked', () => {
+      isSeeking = false;
+
+      if (Math.abs(v.currentTime - latestRequestedTime) > SEEK_EPSILON) {
+        requestSeek(latestRequestedTime);
+      }
+    });
+
+    function loop() {
+      if (loaded && v.duration) {
+        const smoothedTime = v.currentTime + (targetTime - v.currentTime) * EASE;
+
+        if (Math.abs(smoothedTime - latestRequestedTime) > SEEK_EPSILON) {
+          requestSeek(smoothedTime);
+        }
+
+        currentBrightness += (targetBrightness - currentBrightness) * EASE;
+        v.style.filter = `brightness(${currentBrightness.toFixed(3)})`;
+      }
+
+      rafId = requestAnimationFrame(loop);
+    }
+  </script>
 </body>
 </html>
