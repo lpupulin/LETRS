@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LETRS</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 100vw; height: 100vh; overflow: hidden; background: #000; }
+    video {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transition: filter 0.08s linear;
+    }
+    #drop {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: center;
+      color: rgba(255,255,255,0.4); font-family: sans-serif; font-size: 14px;
+    }
+    #drop.hidden { display: none; }
+    input[type="file"] { display: none; }
+  </style>
+</head>
+<body>
+
+<video id="v" muted playsinline preload="auto"></video>
+
+<div id="drop">
+  <label for="f" style="cursor:pointer;">Drop video or click to load</label>
+  <input type="file" id="f" accept="video/*">
+</div>
+
+<script>
+const v = document.getElementById('v');
+const drop = document.getElementById('drop');
+const f = document.getElementById('f');
+let loaded = false;
+
+let targetTime = 0;
+let currentTime = 0;
+let targetBrightness = 1;
+let currentBrightness = 1;
+
+const EASE = 0.06;
+
+f.addEventListener('change', e => load(e.target.files[0]));
+document.body.addEventListener('dragover', e => e.preventDefault());
+document.body.addEventListener('drop', e => { e.preventDefault(); load(e.dataTransfer.files[0]); });
+
+function load(file) {
+  v.src = URL.createObjectURL(file);
+  v.addEventListener('loadedmetadata', () => {
+    loaded = true;
+    drop.classList.add('hidden');
+    v.currentTime = 0;
+    loop();
+  });
+}
+
+document.addEventListener('mousemove', e => {
+  if (!loaded || !v.duration) return;
+
+  // X → target time (inverted: right = start, left = end)
+  targetTime = (e.clientX / window.innerWidth) * v.duration;
+
+  // Y → target brightness
+  const yNorm = e.clientY / window.innerHeight;
+  targetBrightness = 1.1 - yNorm * 0.2;
+});
+
+function loop() {
+  if (loaded && v.duration) {
+    currentTime += (targetTime - currentTime) * EASE;
+    if (Math.abs(v.currentTime - currentTime) > 0.03) {
+      v.currentTime = currentTime;
+    }
+
+    currentBrightness += (targetBrightness - currentBrightness) * EASE;
+    v.style.filter = `brightness(${currentBrightness.toFixed(3)})`;
+  }
+
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
